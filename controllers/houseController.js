@@ -52,7 +52,23 @@ export const createHouse = async (req, res) => {
 
 export const getAllHouses = async (req, res) => {
     try {
-        const houses = await House.find()
+
+        let search=req.query.search || "";
+        const query = {
+            $or: [
+                { title: { $regex: search, $options: "i" } },
+                { description: { $regex: search, $options: "i" } },
+                { type: { $regex: search, $options: "i" } },
+                { address: { $regex: search, $options: "i" } }
+            ]
+        };
+        
+        const houses = await House.find(query)
+
+
+        if (houses.length === 0) {
+            return res.status(404).json({ success: false, message: "No houses found" });
+        }
         // .populate("owner", "name email");
 
         res.json({

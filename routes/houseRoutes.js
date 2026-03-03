@@ -18,4 +18,6 @@ router.post('/', createHouse);
 router.put('/:id', updateHouse);
 router.delete('/:id', protect, authorizeAdmin, deleteHouse);
 
+router.post('/search',getAllHouses)
+
 export default router;
