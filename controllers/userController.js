@@ -7,14 +7,14 @@ import { validationResult } from 'express-validator';
 export const getUsers = async (req, res) => {
     try {
         const users = await User.find();
-        res.status(200).json({
-            success: true,
+        res.json({
+            status: 1,
             count: users.length,
             data: users
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
+        res.json({
+            status: 0,
             message: 'Server Error',
             error: error.message
         });
@@ -29,19 +29,19 @@ export const getUserById = async (req, res) => {
         const user = await User.findById(req.params.id);
 
         if (!user) {
-            return res.status(404).json({
-                success: false,
+            return res.json({
+                status: 0,
                 message: 'User not found'
             });
         }
 
-        res.status(200).json({
-            success: true,
+        res.json({
+            status: 1,
             data: user
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
+        res.json({
+            status: 0,
             message: 'Server Error',
             error: error.message
         });
@@ -55,8 +55,8 @@ export const createUser = async (req, res) => {
     // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({
-            success: false,
+        return res.json({
+            status: 0,
             errors: errors.array()
         });
     }
@@ -64,22 +64,22 @@ export const createUser = async (req, res) => {
     try {
         const user = await User.create(req.body);
 
-        res.status(201).json({
-            success: true,
+        res.json({
+            status: 1,
             message: 'User created successfully',
             data: user
         });
     } catch (error) {
         // Handle duplicate email error
         if (error.code === 11000) {
-            return res.status(400).json({
-                success: false,
+            return res.json({
+                status: 0,
                 message: 'Email already exists'
             });
         }
 
-        res.status(500).json({
-            success: false,
+        res.json({
+            status: 0,
             message: 'Server Error',
             error: error.message
         });
@@ -91,38 +91,52 @@ export const createUser = async (req, res) => {
 // @access  Public
 export const updateUser = async (req, res) => {
     try {
-        const user = await User.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            {
-                new: true,
-                runValidators: true
-            }
-        );
+        const targetUserId = req.user?.isAdmin && req.body.userId
+            ? req.body.userId
+            : req.user?._id;
+
+        
+
+        if (!targetUserId) {
+            return res.status(400).json({
+                status: 0,
+                message: 'User id is required'
+            });
+        }
+
+        const payload = { ...req.body };
+        delete payload.userId;
+        delete payload.password;
+        delete payload.isAdmin;
+
+        const user = await User.findByIdAndUpdate(targetUserId, payload, {
+            new: true,
+            runValidators: true
+        });
 
         if (!user) {
             return res.status(404).json({
-                success: false,
+                status: 0,
                 message: 'User not found'
             });
         }
 
-        res.status(200).json({
-            success: true,
+        res.json({
+            status: 1,
             message: 'User updated successfully',
             data: user
         });
     } catch (error) {
         // Handle duplicate email error
         if (error.code === 11000) {
-            return res.status(400).json({
-                success: false,
+            return res.json({
+                status: 0,
                 message: 'Email already exists'
             });
         }
 
-        res.status(500).json({
-            success: false,
+        res.json({
+            status: 0,
             message: 'Server Error',
             error: error.message
         });
@@ -137,20 +151,20 @@ export const deleteUser = async (req, res) => {
         const user = await User.findByIdAndDelete(req.params.id);
 
         if (!user) {
-            return res.status(404).json({
-                success: false,
+            return res.json({
+                status: 0,
                 message: 'User not found'
             });
         }
 
-        res.status(200).json({
-            success: true,
+        res.json({
+            status: 1,
             message: 'User deleted successfully',
             data: {}
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
+        res.json({
+            status: 0,
             message: 'Server Error',
             error: error.message
         });

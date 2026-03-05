@@ -11,8 +11,8 @@ export const register = async (req, res) => {
         const userExists = await User.findOne({ email });
 
         if (userExists) {
-            return res.status(400).json({
-                success: false,
+            return res.json({
+                status: 0,
                 message: 'User already exists with this email'
             });
         }
@@ -29,10 +29,10 @@ export const register = async (req, res) => {
         });
 
         // Send token response
-        sendTokenResponse(user, 201, res, 'User registered successfully');
+        sendTokenResponse(user, res, 'User registered successfully');
     } catch (error) {
-        res.status(500).json({
-            success: false,
+        res.json({
+            status: 0,
             message: 'Server Error',
             error: error.message
         });
@@ -48,8 +48,8 @@ export const login = async (req, res) => {
 
         // Validate email & password
         if (!email || !password) {
-            return res.status(400).json({
-                success: false,
+            return res.json({
+                status: 0,
                 message: 'Please provide an email and password'
             });
         }
@@ -58,8 +58,8 @@ export const login = async (req, res) => {
         const user = await User.findOne({ email }).select('+password');
 
         if (!user) {
-            return res.status(401).json({
-                success: false,
+            return res.json({
+                status: 0,
                 message: 'Invalid credentials'
             });
         }
@@ -68,17 +68,17 @@ export const login = async (req, res) => {
         const isMatch = await user.matchPassword(password);
 
         if (!isMatch) {
-            return res.status(401).json({
-                success: false,
+            return res.json({
+                status: 0,
                 message: 'Invalid credentials'
             });
         }
 
         // Send token response
-        sendTokenResponse(user, 200, res, 'Login successful');
+        sendTokenResponse(user, res, 'Login successful');
     } catch (error) {
-        res.status(500).json({
-            success: false,
+        res.json({
+            status: 0,
             message: 'Server Error',
             error: error.message
         });
@@ -92,13 +92,13 @@ export const getMe = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
 
-        res.status(200).json({
-            success: true,
+        res.json({
+            status: 1,
             data: user
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
+        res.json({
+            status: 0,
             message: 'Server Error',
             error: error.message
         });
@@ -106,16 +106,70 @@ export const getMe = async (req, res) => {
 };
 
 // Helper function to get token from model, create cookie and send response
-const sendTokenResponse = (user, statusCode, res, message) => {
+const sendTokenResponse = (user, res, message) => {
     // Create token
     const token = user.getSignedJwtToken();
 
     // Remove password from output
     user.password = undefined;
 
-    res.status(statusCode).json({
-        success: true,
+    res.json({
+        status: 1,
         message,
         token,
     });
+};
+
+// @desc    Admin login
+// @route   POST /api/auth/admin/login
+// @access  Public
+export const adminLogin = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // Validate email & password
+        if (!email || !password) {
+            return res.json({
+                status: 0,
+                message: 'Please provide an email and password'
+            });
+        }
+
+        // Check for user (include password field)
+        const user = await User.findOne({ email }).select('+password');
+
+        if (!user) {
+            return res.json({
+                status: 0,
+                message: 'Invalid credentials'
+            });
+        }
+
+        // Check if user is admin
+        if (!user.isAdmin) {
+            return res.json({
+                status: 0,
+                message: 'Not authorized as admin'
+            });
+        }
+
+        // Check if password matches
+        const isMatch = await user.matchPassword(password);
+
+        if (!isMatch) {
+            return res.json({
+                status: 0,
+                message: 'Invalid credentials'
+            });
+        }
+
+        // Send token response
+        sendTokenResponse(user, res, 'Admin login successful');
+    } catch (error) {
+        res.json({
+            status: 0,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
 };

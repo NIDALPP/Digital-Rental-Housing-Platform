@@ -8,8 +8,8 @@ export const createReview = async (req, res) => {
     const house = await House.findOne({ homeId: houseId });
 
     if (!house) {
-      return res.status(404).json({
-        success: false,
+      return res.json({
+        status: 0,
         message: "House not found"
       });
     }
@@ -21,22 +21,22 @@ export const createReview = async (req, res) => {
       comment
     });
 
-    res.status(201).json({
-      success: true,
+    res.json({
+      status: 1,
       data: review
     });
 
   } catch (error) {
 
     if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
+      return res.json({
+        status: 0,
         message: "You already reviewed this house"
       });
     }
 
-    res.status(500).json({
-      success: false,
+    res.json({
+      status: 0,
       message: error.message
     });
   }
@@ -48,13 +48,13 @@ export const getHouseReviews = async (req, res) => {
     const reviews = await Review.find({ house: req.params.houseId });
 
     res.json({
-      success: true,
+      status: 1,
       count: reviews.length,
       data: reviews
     });
 
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.json({ status: 0, message: error.message });
   }
 };
 export const deleteReview = async (req, res) => {
@@ -62,25 +62,25 @@ export const deleteReview = async (req, res) => {
     const review = await Review.findById(req.params.id);
 
     if (!review) {
-      return res.status(404).json({ message: "Review not found" });
+      return res.json({ status: 0, message: "Review not found" });
     }
 
     if (
       review.user !== req.user._id.toString() &&
       !req.user.isAdmin
     ) {
-      return res.status(403).json({ message: "Not authorized" });
+      return res.json({ status: 0, message: "Not authorized" });
     }
 
     await review.deleteOne();
 
     res.json({
-      success: true,
+      status: 1,
       message: "Review deleted"
     });
 
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.json({ status: 0, message: error.message });
   }
 };
 
@@ -91,8 +91,8 @@ export const updateReview = async (req, res) => {
     const review = await Review.findById(req.params.id);
 
     if (!review) {
-      return res.status(404).json({
-        success: false,
+      return res.json({
+        status: 0,
         message: "Review not found"
       });
     }
@@ -102,8 +102,8 @@ export const updateReview = async (req, res) => {
       review.user !== req.user._id.toString() &&
       !req.user.isAdmin
     ) {
-      return res.status(403).json({
-        success: false,
+      return res.json({
+        status: 0,
         message: "Not authorized to update this review"
       });
     }
@@ -114,13 +114,13 @@ export const updateReview = async (req, res) => {
     await review.save();
 
     res.json({
-      success: true,
+      status: 1,
       data: review
     });
 
   } catch (error) {
-    res.status(500).json({
-      success: false,
+    res.json({
+      status: 0,
       message: error.message
     });
   }

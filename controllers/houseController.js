@@ -7,9 +7,9 @@
 //             owner: req.user.id
 //         });
 
-//         res.status(201).json(house);
+//         res.json(house);
 //     } catch (error) {
-//         res.status(500).json({ message: error.message });
+//         res.json({ message: error.message });
 //     }
 // };
 
@@ -22,7 +22,7 @@ import House from "../models/House.js";
 
 export const createHouse = async (req, res) => {
     try {
-        const { title, description, price, type, rooms, bathrooms, isFurnished, address, images ,owner} = req.body;
+        const { title, description, price, type, rooms, bathrooms, isFurnished, address, images, thumbnail, owner } = req.body;
 
         const house = await House.create({
             title,
@@ -34,17 +34,20 @@ export const createHouse = async (req, res) => {
             address,
             price,
             images,
-            owner   // coming from protect middleware
+            thumbnail,
+            owner,
+            approvalStatus: 'Pending'
         });
 
-        res.status(201).json({
-            success: true,
+        res.json({
+            status: 1,
             data: house
         });
 
     } catch (error) {
-        res.status(400).json({ 
-            success: false,message: error.message });
+        res.json({
+            status: 0, message: error.message
+        });
     }
 };
 
@@ -52,33 +55,225 @@ export const createHouse = async (req, res) => {
 
 export const getAllHouses = async (req, res) => {
     try {
+        let search = req.query.search || "";
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+        let sort=null;
+        if(!req.query.sort){
+            sort={createdAt: -1}
+        }
 
-        let search=req.query.search || "";
-        const query = {
+        const matchQuery = {
             $or: [
                 { title: { $regex: search, $options: "i" } },
                 { description: { $regex: search, $options: "i" } },
                 { type: { $regex: search, $options: "i" } },
-                { address: { $regex: search, $options: "i" } }
+                { "address.city": { $regex: search, $options: "i" } },
+                { "address.state": { $regex: search, $options: "i" } },
+                { "address.street": { $regex: search, $options: "i" } }
             ]
         };
-        
-        const houses = await House.find(query)
+        matchQuery={
+            ...matchQuery,
+            approvalStatus: 'Approved',
+            availability: true,
+            isActive: true,
+        }
 
+        let agg = [
+            {
+                $match: matchQuery
+            },
+            {
+                $sort: sort
+            },
+            {
+                $skip: skip
+            },
+            {
+                $limit: limit
+            },
+            {
+                $lookup:{
+                    from:"users",
+                    localField:"owner",
+                    foreignField:"userId",
+                    as:"owner"
+                }
+            },
+
+             {
+                $project: {
+                    _id: 0,
+                    owner: { $first: "$owner" },
+                    title:1,
+                    description:1,
+                    price:1,
+                    type:1,
+                    rooms:1,
+                    bathrooms:1,
+                    isFurnished:1,
+                    address:1,
+                    images:1,
+                    thumbnail:1,
+                    approvalStatus:1,
+                    availability:1,
+                    isActive:1,
+                    createdAt:1,
+                    updatedAt:1,
+
+                   
+                }
+            }
+
+        ]
+        const result = await House.aggregate([
+            { $match: matchQuery },
+            { $sort: { createdAt: -1 } },
+            {
+                $facet: {
+                    data: [{ $skip: skip }, { $limit: limit }],
+                    totalCount: [{ $count: "count" }]
+                }
+            }
+        ]);
+
+        const houses = result[0].data;
+        const total = result[0].totalCount[0]?.count || 0;
 
         if (houses.length === 0) {
-            return res.status(404).json({ success: false, message: "No houses found" });
+            return res.json({ status: 0, message: "No houses found" });
         }
-        // .populate("owner", "name email");
 
         res.json({
-            success: true,
+            status: 1,
             count: houses.length,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit),
             data: houses
         });
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.json({ status: 0, message: error.message });
+    }
+};
+
+// Protected list API:
+// - Admin: all houses
+// - Normal user: only houses owned by logged-in user
+export const getHousesByRole = async (req, res) => {
+    try {
+        let search = req.query.search || "";
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const textQuery = {
+            $or: [
+                { title: { $regex: search, $options: "i" } },
+                { description: { $regex: search, $options: "i" } },
+                { type: { $regex: search, $options: "i" } },
+                { "address.city": { $regex: search, $options: "i" } },
+                { "address.state": { $regex: search, $options: "i" } },
+                { "address.street": { $regex: search, $options: "i" } }
+            ]
+        };
+
+        const isAdmin = Boolean(req.user?.isAdmin);
+        const userIdValue = req.user?.userId;
+        const mongoIdValue = req.user?._id?.toString();
+
+        const matchQuery = isAdmin
+            ? textQuery
+            : {
+                $and: [
+                    textQuery,
+                    { owner: { $in: [userIdValue, mongoIdValue].filter(Boolean) } }
+                ]
+            };
+
+        const result = await House.aggregate([
+            { $match: matchQuery },
+            { $sort: { createdAt: -1 } },
+            {
+                $facet: {
+                    data: [{ $skip: skip }, { $limit: limit }],
+                    totalCount: [{ $count: "count" }]
+                }
+            }
+        ]);
+
+        const houses = result[0].data;
+        const total = result[0].totalCount[0]?.count || 0;
+
+        if (houses.length === 0) {
+            return res.json({ status: 0, message: "No houses found" });
+        }
+
+        return res.json({
+            status: 1,
+            count: houses.length,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit),
+            data: houses
+        });
+    } catch (error) {
+        return res.json({ status: 0, message: error.message });
+    }
+};
+
+//Get only Approved Houses (Public)
+export const getApprovedHouses = async (req, res) => {
+    try {
+        let search = req.query.search || "";
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const matchQuery = {
+            approvalStatus: 'Approved',
+            $or: [
+                { title: { $regex: search, $options: "i" } },
+                { description: { $regex: search, $options: "i" } },
+                { type: { $regex: search, $options: "i" } },
+                { "address.city": { $regex: search, $options: "i" } },
+                { "address.state": { $regex: search, $options: "i" } },
+                { "address.street": { $regex: search, $options: "i" } }
+            ]
+        };
+
+        const result = await House.aggregate([
+            { $match: matchQuery },
+            { $sort: { createdAt: -1 } },
+            {
+                $facet: {
+                    data: [{ $skip: skip }, { $limit: limit }],
+                    totalCount: [{ $count: "count" }]
+                }
+            }
+        ]);
+
+        const houses = result[0].data;
+        const total = result[0].totalCount[0]?.count || 0;
+
+        if (houses.length === 0) {
+            return res.json({ status: 0, message: "No approved houses found" });
+        }
+
+        res.json({
+            status: 1,
+            count: houses.length,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit),
+            data: houses
+        });
+
+    } catch (error) {
+        res.json({ status: 0, message: error.message });
     }
 };
 
@@ -89,13 +284,13 @@ export const getHouseById = async (req, res) => {
             .populate("owner", "name email");
 
         if (!house) {
-            return res.status(404).json({ message: "House not found" });
+            return res.json({ status: 0, message: "House not found" });
         }
 
-        res.json({ success: true, data: house });
+        res.json({ status: 1, data: house });
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.json({ status: 0, message: error.message });
     }
 };
 
@@ -105,21 +300,21 @@ export const getHouseById = async (req, res) => {
 // Update House (Admin only)
 export const updateHouse = async (req, res) => {
     try {
-        const house = await House.findOne({homeId: req.params.id});
+        const house = await House.findOne({ homeId: req.params.id });
 
         if (!house) {
-            return res.status(404).json({ message: "House not found" });
+            return res.json({ status: 0, message: "House not found" });
         }
 
         const updatedHouse = await House.findOneAndUpdate(
-            {homeId: req.params.id},
+            { homeId: req.params.id },
             req.body,
             { new: true }
         );
 
-        res.status(200).json(updatedHouse);
+        res.json({ status: 1, data: updatedHouse });
     } catch (error) {
-        res.status(500).json({ message: "Server error" });
+        res.json({ status: 0, message: "Server error" });
     }
 };
 
@@ -127,16 +322,16 @@ export const updateHouse = async (req, res) => {
 // Delete House (Admin only)
 export const deleteHouse = async (req, res) => {
     try {
-const house = await House.findOne({ homeId: req.params.id });
+        const house = await House.findOne({ homeId: req.params.id });
 
         if (!house) {
-            return res.status(404).json({ message: "House not found" });
+            return res.json({ status: 0, message: "House not found" });
         }
 
         await house.deleteOne();
 
-        res.status(200).json({ message: "House deleted successfully" });
+        res.json({ status: 1, message: "House deleted successfully" });
     } catch (error) {
-        res.status(500).json({ message: "Server error" });
+        res.json({ status: 0, message: "Server error" });
     }
 };

@@ -37,6 +37,10 @@ const houseSchema = new mongoose.Schema(
             type: [String],
             trim: true
         },
+        thumbnail: {
+            type: String,
+            trim: true
+        },
         // name: {
         //     type: String,
         //     trim: true
@@ -56,6 +60,11 @@ const houseSchema = new mongoose.Schema(
             type: Boolean,
             default: true
         },
+        approvalStatus: {
+            type: String,
+            enum: ['Pending', 'Approved', 'Rejected'],
+            default: 'Pending'
+        },
         owner: {
             type: String,
             // ref: "User",
@@ -63,6 +72,10 @@ const houseSchema = new mongoose.Schema(
         },
         homeId: {
             type: String,
+            trim: true
+        },
+        amenities: {
+            type: [String],
             trim: true
         }
     },

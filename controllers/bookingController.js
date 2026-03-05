@@ -3,71 +3,77 @@ import House from "../models/House.js";
 
 //Booking is done by user only
 export const createBooking = async (req, res) => {
-    try {
-        const { houseId, startDate, endDate } = req.body;
-        const house = await House.findOne({homeId: houseId});
-        
-        // const house = await House.findOne({homeId: homeId});
-        console.log(house);
-        
-        // Check if house exists
-        if (!house) {
-            return res.status(404).json({ success: false, message: "House not found" });
-        }
+  try {
+    const { houseId, startDate, endDate } = req.body;
+    const house = await House.findOne({ homeId: houseId });
 
-    //     // Check overlapping booking
-    //     const overlappingBooking = await Booking.findOne({
-    //   house: houseId,
-    //   status: { $ne: "cancelled" },
-    //   startDate: { $lt: endDate },
-    //   endDate: { $gt: startDate }
-    // });
+    // const house = await House.findOne({homeId: homeId});
 
-    // // if (overlappingBooking) {
-    // //   return res.status(400).json({
-    // //     success: false,
-    // //     message: "House is already booked for selected dates"
-    // //   });
-    // // }
-
-        const days =(new Date(endDate) - new Date(startDate)) /(1000 * 60 * 60 * 24);
-
-        const totalPrice = days * house.price;
-
-        // Create booking
-        const booking = await Booking.create({
-            user: req.user._id,
-            house: houseId,
-            startDate,
-            endDate,
-            totalPrice
-        });
-
-        res.status(201).json({
-            success: true,
-            data: booking
-        });
-
-    } catch (error) {
-        res.status(400).json({ success: false, message: error.message });
+    // Check if house exists
+    if (!house) {
+      return res.json({ status: 0, message: "House not found" });
     }
+
+    // Check overlapping booking
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    const overlappingBooking = await Booking.findOne({
+      house: houseId,
+      status: { $nin: ["cancelled", "rejected"] },
+      $or: [
+        {
+          startDate: { $lt: end },
+          endDate: { $gt: start }
+        }
+      ]
+    });
+
+    if (overlappingBooking) {
+      return res.json({
+        status: 0,
+        message: "House is already booked for selected dates"
+      });
+    }
+
+    const days = (end - start) / (1000 * 60 * 60 * 24);
+
+    const totalPrice = days * house.price;
+
+    // Create booking
+    const booking = await Booking.create({
+      user: req.user._id,
+      house: houseId,
+      startDate,
+      endDate,
+      totalPrice
+    });
+
+    res.json({
+      status: 1,
+      data: booking
+    });
+
+  } catch (error) {
+    res.json({ status: 0, message: error.message });
+  }
 };
 
 // Get My Bookings
 export const getMyBookings = async (req, res) => {
-    try {
-        const bookings = await Booking.find({ user: req.user._id })
-            .populate("house");
+  try {
+    const bookings = await Booking.find({ user: req.user._id })
+      .populate("house");
 
-        res.json({
-            success: true,
-//             count: bookings.length,
-            data: bookings
-        });
+    res.json({
+      status: 1,
+      //             count: bookings.length,
+      data: bookings
+    });
 
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+  } catch (error) {
+    res.json({ status: 0, message: error.message });
+  }
 };
 
 // Admin get All booking
@@ -79,11 +85,11 @@ export const getAllBookings = async (req, res) => {
       .populate("house", "title price");
 
     res.json({
-      success: true,
+      status: 1,
       data: bookings
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.json({ status: 0, message: error.message });
   }
 };
 
@@ -93,25 +99,48 @@ export const cancelBooking = async (req, res) => {
     const booking = await Booking.findById(req.params.id);
 
     if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
+      return res.json({ status: 0, message: "Booking not found" });
     }
 
     if (
       booking.user.toString() !== req.user._id.toString() &&
       !req.user.isAdmin
     ) {
-      return res.status(403).json({ message: "Not authorized" });
+      return res.json({ status: 0, message: "Not authorized" });
     }
 
     booking.status = "cancelled";
     await booking.save();
 
     res.json({
-      success: true,
+      status: 1,
       message: "Booking cancelled"
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.json({ status: 0, message: error.message });
+  }
+};
+
+// Get Booked Dates for House
+export const getBookedDates = async (req, res) => {
+  try {
+    const { houseId } = req.params;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const bookings = await Booking.find({
+      house: houseId,
+      status: { $nin: ["cancelled", "rejected"] },
+      endDate: { $gte: today }
+    }).select("startDate endDate -_id");
+
+    res.json({
+      status: 1,
+      data: bookings
+    });
+  } catch (error) {
+    res.json({ status: 0, message: error.message });
   }
 };
 
@@ -129,7 +158,7 @@ export const cancelBooking = async (req, res) => {
 
 //     // Validate input
 //     if (!houseId || !startDate || !endDate) {
-//       return res.status(400).json({
+//       return res.json({
 //         message: "House, start date and end date are required"
 //       });
 //     }
@@ -138,7 +167,7 @@ export const cancelBooking = async (req, res) => {
 //     const end = new Date(endDate);
 
 //     if (end <= start) {
-//       return res.status(400).json({
+//       return res.json({
 //         message: "End date must be after start date"
 //       });
 //     }
@@ -146,7 +175,7 @@ export const cancelBooking = async (req, res) => {
 //     // Check if house exists
 //     const house = await House.findById(houseId);
 //     if (!house) {
-//       return res.status(404).json({ message: "House not found" });
+//       return res.json({ message: "House not found" });
 //     }
 
 //     // Check booking date conflict
@@ -161,7 +190,7 @@ export const cancelBooking = async (req, res) => {
 //     });
 
 //     if (existingBooking) {
-//       return res.status(400).json({
+//       return res.json({
 //         message: "This house is already booked for the selected dates"
 //       });
 //     }
@@ -183,10 +212,10 @@ export const cancelBooking = async (req, res) => {
 //       totalPrice
 //     });
 
-//     res.status(201).json(booking);
+//     res.json(booking);
 
 //   } catch (error) {
-//     res.status(500).json({
+//     res.json({
 //       message: "Server error",
 //       error: error.message
 //     });
@@ -205,10 +234,10 @@ export const cancelBooking = async (req, res) => {
 //       user: req.user._id
 //     }).populate('house');
 
-//     res.status(200).json(bookings);
+//     res.json(bookings);
 
 //   } catch (error) {
-//     res.status(500).json({ message: "Server error" });
+//     res.json({ message: "Server error" });
 //   }
 // };
 
@@ -224,10 +253,10 @@ export const cancelBooking = async (req, res) => {
 //       .populate('user', 'name email')
 //       .populate('house', 'title price address');
 
-//     res.status(200).json(bookings);
+//     res.json(bookings);
 
 //   } catch (error) {
-//     res.status(500).json({ message: "Server error" });
+//     res.json({ message: "Server error" });
 //   }
 // };
 
@@ -244,7 +273,7 @@ export const cancelBooking = async (req, res) => {
 //       .populate('house');
 
 //     if (!booking) {
-//       return res.status(404).json({
+//       return res.json({
 //         message: "Booking not found"
 //       });
 //     }
@@ -254,15 +283,15 @@ export const cancelBooking = async (req, res) => {
 //       booking.user._id.toString() !== req.user._id.toString() &&
 //       !req.user.isAdmin
 //     ) {
-//       return res.status(403).json({
+//       return res.json({
 //         message: "Not authorized"
 //       });
 //     }
 
-//     res.status(200).json(booking);
+//     res.json(booking);
 
 //   } catch (error) {
-//     res.status(500).json({ message: "Server error" });
+//     res.json({ message: "Server error" });
 //   }
 // };
 
@@ -277,7 +306,7 @@ export const cancelBooking = async (req, res) => {
 //     const booking = await Booking.findById(req.params.id);
 
 //     if (!booking) {
-//       return res.status(404).json({
+//       return res.json({
 //         message: "Booking not found"
 //       });
 //     }
@@ -287,7 +316,7 @@ export const cancelBooking = async (req, res) => {
 //       booking.user.toString() !== req.user._id.toString() &&
 //       !req.user.isAdmin
 //     ) {
-//       return res.status(403).json({
+//       return res.json({
 //         message: "Not authorized"
 //       });
 //     }
@@ -298,10 +327,10 @@ export const cancelBooking = async (req, res) => {
 //       { new: true }
 //     );
 
-//     res.status(200).json(updatedBooking);
+//     res.json(updatedBooking);
 
 //   } catch (error) {
-//     res.status(500).json({ message: "Server error" });
+//     res.json({ message: "Server error" });
 //   }
 // };
 
@@ -316,7 +345,7 @@ export const cancelBooking = async (req, res) => {
 //     const booking = await Booking.findById(req.params.id);
 
 //     if (!booking) {
-//       return res.status(404).json({
+//       return res.json({
 //         message: "Booking not found"
 //       });
 //     }
@@ -326,18 +355,18 @@ export const cancelBooking = async (req, res) => {
 //       booking.user.toString() !== req.user._id.toString() &&
 //       !req.user.isAdmin
 //     ) {
-//       return res.status(403).json({
+//       return res.json({
 //         message: "Not authorized"
 //       });
 //     }
 
 //     await booking.deleteOne();
 
-//     res.status(200).json({
+//     res.json({
 //       message: "Booking deleted successfully"
 //     });
 
 //   } catch (error) {
-//     res.status(500).json({ message: "Server error" });
+//     res.json({ message: "Server error" });
 //   }
 // };

@@ -1,9 +1,5 @@
-// //booking for reservation of house
 
 import mongoose from "mongoose";
-
-
-// // property (reference to property)
 
 const bookingSchema = new mongoose.Schema({
     house: {
@@ -29,7 +25,7 @@ const bookingSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'approved', 'rejected'],
+        enum: ['pending', 'approved', 'rejected','cancelled'],
         default: 'pending'
     }
 },
