@@ -22,13 +22,17 @@ import House from "../models/House.js";
 
 export const createHouse = async (req, res) => {
     try {
-        const { title, description, price, type, rooms, bathrooms, isFurnished, address, images, thumbnail, owner } = req.body;
+        
+
+        const owner = req.user.userId
+        
+        const { title, description, price, type, bedrooms, bathrooms, isFurnished, address, images, thumbnail, sqft } = req.body;
 
         const house = await House.create({
             title,
             description,
             type,
-            rooms,
+            bedrooms,
             bathrooms,
             isFurnished,
             address,
@@ -197,16 +201,26 @@ export const getHousesByRole = async (req, res) => {
         const result = await House.aggregate([
             { $match: matchQuery },
             { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: limit },
+            
             {
-                $facet: {
-                    data: [{ $skip: skip }, { $limit: limit }],
-                    totalCount: [{ $count: "count" }]
+                $project:{
+                    title:1,
+                    price:1,
+                    thumbnail:1,
+                    availability:1,
+                    approvalStatus:1,
+                    createdAt:1,
+                    homeId:1,
                 }
             }
         ]);
+        console.log(result);
+        const houses = result;
+        const total =result.length;
 
-        const houses = result[0].data;
-        const total = result[0].totalCount[0]?.count || 0;
+       
 
         if (houses.length === 0) {
             return res.json({ status: 0, message: "No houses found" });
@@ -280,8 +294,7 @@ export const getApprovedHouses = async (req, res) => {
 //Get single house by id
 export const getHouseById = async (req, res) => {
     try {
-        const house = await House.findById(req.params.id)
-            .populate("owner", "name email");
+        const house = await House.findOne({ homeId: req.params.id })
 
         if (!house) {
             return res.json({ status: 0, message: "House not found" });

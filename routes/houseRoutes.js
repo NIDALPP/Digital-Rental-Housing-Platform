@@ -8,19 +8,22 @@ import {
     updateHouse,
     deleteHouse
 } from '../controllers/houseController.js';
+import { houseValidationRules } from '../middleware/validation.js';
 
 import { protect, authorizeAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
+router.post('/add', protect,houseValidationRules, createHouse);
 
 router.get('/', getApprovedHouses);
 router.get('/list', protect, getHousesByRole);
 router.get('/admin', protect, authorizeAdmin, getAllHouses);
-router.get('/:id', getHouseById);
+router.get('/:id',protect, getHouseById);
 
-router.post('/', protect, createHouse);
-router.put('/:id', protect, authorizeAdmin, updateHouse);
+
+
+router.put('/:id', protect, updateHouse);
 router.delete('/:id', protect, authorizeAdmin, deleteHouse);
 
 

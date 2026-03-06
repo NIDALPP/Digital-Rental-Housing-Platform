@@ -21,7 +21,7 @@ const houseSchema = new mongoose.Schema(
             type: String,
             trim: true
         },
-        rooms: {
+        bedrooms: {
             type: Number,
             required: true
         },
@@ -76,6 +76,10 @@ const houseSchema = new mongoose.Schema(
         },
         amenities: {
             type: [String],
+            trim: true
+        },
+        sqft: {
+            type: Number,
             trim: true
         }
     },
